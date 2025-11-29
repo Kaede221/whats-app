@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../../../../core/theme/theme_controller.dart';
 import '../models/models.dart';
 
 /// 任务控制器
@@ -9,9 +10,13 @@ class TaskController extends ChangeNotifier {
   
   factory TaskController() => _instance;
   
+  final ThemeController _themeController = ThemeController();
+  
   TaskController._internal() {
+    // 监听主题变化，更新收集箱颜色
+    _themeController.addListener(_onThemeChanged);
     // 初始化默认分组
-    _groups.add(TaskGroup.inbox);
+    _initInbox();
   }
 
   // 任务列表
@@ -19,6 +24,34 @@ class TaskController extends ChangeNotifier {
   
   // 分组列表
   final List<TaskGroup> _groups = [];
+
+  /// 初始化收集箱
+  void _initInbox() {
+    _groups.add(_createInbox());
+  }
+
+  /// 创建收集箱（使用当前主题颜色）
+  TaskGroup _createInbox() {
+    return TaskGroup(
+      id: 'inbox',
+      name: '收集箱',
+      color: _themeController.seedColor,
+      icon: Icons.inbox_outlined,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+  }
+
+  /// 主题变化时更新收集箱颜色
+  void _onThemeChanged() {
+    final inboxIndex = _groups.indexWhere((g) => g.id == 'inbox');
+    if (inboxIndex != -1) {
+      _groups[inboxIndex] = _groups[inboxIndex].copyWith(
+        color: _themeController.seedColor,
+      );
+      notifyListeners();
+    }
+  }
 
   /// 获取所有任务
   List<Task> get tasks => List.unmodifiable(_tasks);
@@ -173,7 +206,7 @@ class TaskController extends ChangeNotifier {
     final group = TaskGroup(
       id: 'group_${now.millisecondsSinceEpoch}',
       name: name,
-      color: color ?? const Color(0xFF6750A4),
+      color: color ?? _themeController.seedColor,
       icon: icon ?? Icons.folder_outlined,
       createdAt: now,
       updatedAt: now,
@@ -191,11 +224,11 @@ class TaskController extends ChangeNotifier {
     }
   }
 
-  /// 删除分组（将该分组下的任务移到收件箱）
+  /// 删除分组（将该分组下的任务移到收集箱）
   void deleteGroup(String groupId) {
-    if (groupId == 'inbox') return; // 不能删除收件箱
+    if (groupId == 'inbox') return; // 不能删除收集箱
     
-    // 将该分组下的任务移到收件箱
+    // 将该分组下的任务移到收集箱
     for (int i = 0; i < _tasks.length; i++) {
       if (_tasks[i].groupId == groupId) {
         _tasks[i] = _tasks[i].copyWith(groupId: 'inbox');

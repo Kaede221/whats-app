@@ -19,10 +19,10 @@ class TaskGroup {
     required this.updatedAt,
   });
 
-  /// 默认分组（收件箱）
+  /// 默认分组（收集箱）
   static TaskGroup get inbox => TaskGroup(
         id: 'inbox',
-        name: '收件箱',
+        name: '收集箱',
         color: const Color(0xFF6750A4),
         icon: Icons.inbox_outlined,
         createdAt: DateTime.now(),

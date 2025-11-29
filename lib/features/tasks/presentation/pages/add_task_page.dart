@@ -32,6 +32,7 @@ class _AddTaskPageState extends State<AddTaskPage> {
   @override
   void initState() {
     super.initState();
+    _taskController.addListener(_onControllerChanged);
     _titleController = TextEditingController(text: widget.task?.title ?? '');
     _descriptionController = TextEditingController(text: widget.task?.description ?? '');
     
@@ -44,9 +45,14 @@ class _AddTaskPageState extends State<AddTaskPage> {
 
   @override
   void dispose() {
+    _taskController.removeListener(_onControllerChanged);
     _titleController.dispose();
     _descriptionController.dispose();
     super.dispose();
+  }
+
+  void _onControllerChanged() {
+    setState(() {});
   }
 
   @override
@@ -170,7 +176,6 @@ class _AddTaskPageState extends State<AddTaskPage> {
   /// 构建分组选择器
   Widget _buildGroupSelector(BuildContext context) {
     final theme = Theme.of(context);
-    final groups = _taskController.groups;
     final currentGroup = _taskController.getGroupById(_groupId) ?? TaskGroup.inbox;
     
     return InkWell(
@@ -205,36 +210,171 @@ class _AddTaskPageState extends State<AddTaskPage> {
   /// 显示分组选择器
   void _showGroupPicker(BuildContext context) {
     final groups = _taskController.groups;
+    final theme = Theme.of(context);
     
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       builder: (context) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // 标题栏
             Padding(
               padding: const EdgeInsets.all(16),
-              child: Text(
-                '选择分组',
-                style: Theme.of(context).textTheme.titleMedium,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '选择分组',
+                      style: theme.textTheme.titleMedium,
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _showCreateGroupDialog(context);
+                    },
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('新建'),
+                  ),
+                ],
               ),
             ),
             const Divider(height: 1),
+            
+            // 分组列表
             ...groups.map((group) => ListTile(
               leading: Icon(group.icon, color: group.color),
               title: Text(group.name),
               trailing: _groupId == group.id
-                  ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary)
+                  ? Icon(Icons.check, color: theme.colorScheme.primary)
                   : null,
               onTap: () {
                 setState(() => _groupId = group.id);
                 Navigator.pop(context);
               },
             )),
+            
+            const SizedBox(height: 8),
           ],
         ),
       ),
     );
+  }
+
+  /// 显示创建分组对话框
+  void _showCreateGroupDialog(BuildContext context) {
+    final theme = Theme.of(context);
+    final nameController = TextEditingController();
+    Color selectedColor = const Color(0xFF6750A4);
+    
+    // 预设颜色列表
+    final presetColors = [
+      const Color(0xFF6750A4), // 紫色
+      const Color(0xFF2196F3), // 蓝色
+      const Color(0xFF4CAF50), // 绿色
+      const Color(0xFFFF9800), // 橙色
+      const Color(0xFFF44336), // 红色
+      const Color(0xFFE91E63), // 粉色
+      const Color(0xFF00BCD4), // 青色
+      const Color(0xFF795548), // 棕色
+    ];
+    
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('新建分组'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 分组名称输入
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: '分组名称',
+                  hintText: '输入分组名称',
+                  border: OutlineInputBorder(),
+                ),
+                autofocus: true,
+              ),
+              
+              const SizedBox(height: 16),
+              
+              // 颜色选择
+              Text(
+                '选择颜色',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: presetColors.map((color) {
+                  final isSelected = selectedColor.value == color.value;
+                  return GestureDetector(
+                    onTap: () {
+                      setDialogState(() => selectedColor = color);
+                    },
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                        border: isSelected
+                            ? Border.all(
+                                color: theme.colorScheme.onSurface,
+                                width: 3,
+                              )
+                            : null,
+                      ),
+                      child: isSelected
+                          ? Icon(
+                              Icons.check,
+                              color: _getContrastColor(color),
+                              size: 20,
+                            )
+                          : null,
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () {
+                final name = nameController.text.trim();
+                if (name.isNotEmpty) {
+                  final newGroup = _taskController.createGroup(
+                    name: name,
+                    color: selectedColor,
+                  );
+                  setState(() => _groupId = newGroup.id);
+                  Navigator.pop(context);
+                }
+              },
+              child: const Text('创建'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 获取对比色
+  Color _getContrastColor(Color color) {
+    final luminance = color.computeLuminance();
+    return luminance > 0.5 ? Colors.black : Colors.white;
   }
 
   /// 构建日期选择器
