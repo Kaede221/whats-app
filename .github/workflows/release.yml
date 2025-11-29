@@ -5,7 +5,7 @@ on:
     types: [created]
 
 env:
-  FLUTTER_VERSION: '3.32.0'
+  FLUTTER_VERSION: '3.38.3'
 
 jobs:
   # Android APK 构建
