@@ -153,6 +153,7 @@ class _AddTaskPageState extends State<AddTaskPage> {
 
   /// 构建优先级选择器
   Widget _buildPrioritySelector(BuildContext context) {
+    final theme = Theme.of(context);
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -161,18 +162,19 @@ class _AddTaskPageState extends State<AddTaskPage> {
         return ChoiceChip(
           label: Text(priority.label),
           selected: isSelected,
+          showCheckmark: false,
           onSelected: (selected) {
             if (selected) {
               setState(() => _priority = priority);
             }
           },
           avatar: Icon(
-            priority.icon,
+            isSelected ? Icons.check : priority.icon,
             size: 18,
-            color: isSelected ? priority.color : null,
+            color: isSelected ? priority.color : theme.colorScheme.outline,
           ),
           selectedColor: priority.color.withOpacity(0.2),
-          side: isSelected 
+          side: isSelected
               ? BorderSide(color: priority.color, width: 2)
               : null,
         );
