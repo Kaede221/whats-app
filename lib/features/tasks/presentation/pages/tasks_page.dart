@@ -306,13 +306,7 @@ class _TasksPageState extends State<TasksPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('已删除 "${task.title}"'),
-        duration: const Duration(seconds: 3),
-        action: SnackBarAction(
-          label: '撤销',
-          onPressed: () {
-            _taskController.addTask(task);
-          },
-        ),
+        duration: Duration(seconds: 3),
       ),
     );
   }
