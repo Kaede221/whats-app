@@ -17,6 +17,7 @@ class StorageService {
   static const String keySeedColor = 'seed_color';
   static const String keyTasks = 'tasks';
   static const String keyGroups = 'groups';
+  static const String keyViewSettings = 'view_settings';
 
   /// 初始化存储服务
   /// 必须在应用启动时调用
@@ -96,6 +97,28 @@ class StorageService {
     try {
       final List<dynamic> decoded = jsonDecode(jsonString);
       return decoded.cast<Map<String, dynamic>>();
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // ===== 视图设置相关存储 =====
+
+  /// 保存视图设置
+  Future<bool> saveViewSettings(Map<String, dynamic> settings) async {
+    _ensureInitialized();
+    final jsonString = jsonEncode(settings);
+    return await _prefs!.setString(keyViewSettings, jsonString);
+  }
+
+  /// 获取视图设置
+  Map<String, dynamic>? getViewSettings() {
+    _ensureInitialized();
+    final jsonString = _prefs!.getString(keyViewSettings);
+    if (jsonString == null) return null;
+    
+    try {
+      return jsonDecode(jsonString) as Map<String, dynamic>;
     } catch (e) {
       return null;
     }

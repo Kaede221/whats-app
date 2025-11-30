@@ -6,6 +6,7 @@ import 'core/theme/theme_controller.dart';
 import 'core/constants/app_constants.dart';
 import 'features/shell/presentation/pages/app_shell.dart';
 import 'features/tasks/domain/controllers/task_controller.dart';
+import 'features/tasks/domain/controllers/view_settings_controller.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,6 +19,9 @@ void main() async {
   
   // 加载任务数据
   await TaskController().loadFromStorage();
+  
+  // 加载视图设置
+  await ViewSettingsController().loadFromStorage();
   
   runApp(const WhatsNowApp());
 }

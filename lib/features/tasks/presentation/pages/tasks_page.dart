@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../domain/models/models.dart';
 import '../../domain/controllers/task_controller.dart';
+import '../../domain/controllers/view_settings_controller.dart';
 import '../widgets/task_list_item.dart';
 import '../widgets/task_drawer.dart';
+import '../widgets/sort_group_dialog.dart';
 import 'add_task_page.dart';
 
 /// 任务页面
@@ -16,6 +18,8 @@ class TasksPage extends StatefulWidget {
 
 class _TasksPageState extends State<TasksPage> {
   final TaskController _taskController = TaskController();
+  final ViewSettingsController _viewSettingsController =
+      ViewSettingsController();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   // 当前筛选器，默认显示收集箱
@@ -25,6 +29,7 @@ class _TasksPageState extends State<TasksPage> {
   void initState() {
     super.initState();
     _taskController.addListener(_onTasksChanged);
+    _viewSettingsController.addListener(_onViewSettingsChanged);
     // 初始化为收集箱筛选器
     final inbox = _taskController.getGroupById('inbox') ?? TaskGroup.inbox;
     _currentFilter = TaskFilter.fromGroup(
@@ -38,6 +43,7 @@ class _TasksPageState extends State<TasksPage> {
   @override
   void dispose() {
     _taskController.removeListener(_onTasksChanged);
+    _viewSettingsController.removeListener(_onViewSettingsChanged);
     super.dispose();
   }
 
@@ -59,21 +65,28 @@ class _TasksPageState extends State<TasksPage> {
     });
   }
 
+  void _onViewSettingsChanged() {
+    setState(() {});
+  }
+
   /// 获取当前筛选后的任务列表
   List<Task> _getFilteredTasks() {
     final allTasks = _taskController.tasks;
 
+    List<Task> filtered;
     switch (_currentFilter.type) {
       case TaskFilterType.all:
-        return allTasks;
+        filtered = List.from(allTasks);
+        break;
 
       case TaskFilterType.group:
         if (_currentFilter.groupId != null) {
-          return allTasks
-              .where((t) => t.groupId == _currentFilter.groupId)
-              .toList();
+          filtered =
+              allTasks.where((t) => t.groupId == _currentFilter.groupId).toList();
+        } else {
+          filtered = List.from(allTasks);
         }
-        return allTasks;
+        break;
 
       case TaskFilterType.dateRange:
         if (_currentFilter.daysRange != null) {
@@ -81,7 +94,7 @@ class _TasksPageState extends State<TasksPage> {
           final today = DateTime(now.year, now.month, now.day);
           final endDate = today.add(Duration(days: _currentFilter.daysRange!));
 
-          return allTasks.where((t) {
+          filtered = allTasks.where((t) {
             if (t.dueDate == null) return false;
             final dueDate = DateTime(
               t.dueDate!.year,
@@ -91,8 +104,154 @@ class _TasksPageState extends State<TasksPage> {
             return dueDate.isAfter(today.subtract(const Duration(days: 1))) &&
                 dueDate.isBefore(endDate.add(const Duration(days: 1)));
           }).toList();
+        } else {
+          filtered = List.from(allTasks);
         }
-        return allTasks;
+        break;
+    }
+
+    // 应用排序
+    _sortTasks(filtered);
+
+    return filtered;
+  }
+
+  /// 对任务列表进行排序
+  void _sortTasks(List<Task> tasks) {
+    final sortBy = _viewSettingsController.sortBy;
+    final sortOrder = _viewSettingsController.sortOrder;
+    final isAscending = sortOrder == SortOrder.ascending;
+
+    tasks.sort((a, b) {
+      // 未完成的任务排在前面
+      if (a.isCompleted != b.isCompleted) {
+        return a.isCompleted ? 1 : -1;
+      }
+
+      int comparison;
+      switch (sortBy) {
+        case SortBy.createdAt:
+          comparison = a.createdAt.compareTo(b.createdAt);
+          break;
+        case SortBy.dueDate:
+          // 没有截止日期的排在后面
+          if (a.dueDate == null && b.dueDate == null) {
+            comparison = a.createdAt.compareTo(b.createdAt);
+          } else if (a.dueDate == null) {
+            comparison = 1;
+          } else if (b.dueDate == null) {
+            comparison = -1;
+          } else {
+            comparison = a.dueDate!.compareTo(b.dueDate!);
+          }
+          break;
+        case SortBy.priority:
+          comparison = a.priority.value.compareTo(b.priority.value);
+          break;
+      }
+
+      return isAscending ? comparison : -comparison;
+    });
+  }
+
+  /// 根据分组方式对任务进行分组
+  Map<String, List<Task>> _groupTasks(List<Task> tasks) {
+    final groupBy = _viewSettingsController.groupBy;
+
+    if (groupBy == GroupBy.none) {
+      return {'': tasks};
+    }
+
+    final Map<String, List<Task>> grouped = {};
+
+    for (final task in tasks) {
+      String key;
+      switch (groupBy) {
+        case GroupBy.none:
+          key = '';
+          break;
+        case GroupBy.group:
+          final group = _taskController.getGroupById(task.groupId);
+          key = group?.name ?? '未分组';
+          break;
+        case GroupBy.dueDate:
+          key = _getDateGroupKey(task.dueDate);
+          break;
+        case GroupBy.priority:
+          key = task.priority.label;
+          break;
+      }
+
+      grouped.putIfAbsent(key, () => []);
+      grouped[key]!.add(task);
+    }
+
+    return grouped;
+  }
+
+  /// 获取日期分组的键名
+  String _getDateGroupKey(DateTime? dueDate) {
+    if (dueDate == null) return '无截止日期';
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(const Duration(days: 1));
+    final nextWeek = today.add(const Duration(days: 7));
+    final taskDate = DateTime(dueDate.year, dueDate.month, dueDate.day);
+
+    if (taskDate.isBefore(today)) {
+      return '已过期';
+    } else if (taskDate == today) {
+      return '今天';
+    } else if (taskDate == tomorrow) {
+      return '明天';
+    } else if (taskDate.isBefore(nextWeek)) {
+      return '本周';
+    } else {
+      return '以后';
+    }
+  }
+
+  /// 获取分组的排序优先级
+  int _getGroupSortPriority(String groupKey, GroupBy groupBy) {
+    switch (groupBy) {
+      case GroupBy.none:
+        return 0;
+      case GroupBy.group:
+        // 分组按名称排序
+        return 0;
+      case GroupBy.dueDate:
+        // 日期分组按时间顺序
+        switch (groupKey) {
+          case '已过期':
+            return 0;
+          case '今天':
+            return 1;
+          case '明天':
+            return 2;
+          case '本周':
+            return 3;
+          case '以后':
+            return 4;
+          case '无截止日期':
+            return 5;
+          default:
+            return 6;
+        }
+      case GroupBy.priority:
+        // 优先级分组按优先级排序
+        switch (groupKey) {
+          case '高':
+            return 0;
+          case '中':
+            return 1;
+          case '低':
+            return 2;
+          case '无':
+            return 3;
+          default:
+            return 4;
+        }
     }
   }
 
@@ -102,6 +261,7 @@ class _TasksPageState extends State<TasksPage> {
     final incompleteTasks = filteredTasks.where((t) => !t.isCompleted).toList();
     final completedTasks = filteredTasks.where((t) => t.isCompleted).toList();
     final hasAnyTasks = incompleteTasks.isNotEmpty || completedTasks.isNotEmpty;
+    final hideDetails = _viewSettingsController.hideDetails;
 
     return Scaffold(
       key: _scaffoldKey,
@@ -115,14 +275,46 @@ class _TasksPageState extends State<TasksPage> {
         title: Text(_currentFilter.name),
         titleSpacing: 0,
         actions: [
-          if (completedTasks.isNotEmpty)
-            PopupMenuButton<String>(
-              onSelected: (value) {
-                if (value == 'clear_completed') {
+          // 三点菜单
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            onSelected: (value) {
+              switch (value) {
+                case 'toggle_details':
+                  _viewSettingsController.toggleHideDetails();
+                  break;
+                case 'sort_group':
+                  SortGroupDialog.show(context);
+                  break;
+                case 'clear_completed':
                   _showClearCompletedDialog(context);
-                }
-              },
-              itemBuilder: (context) => [
+                  break;
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'toggle_details',
+                child: Row(
+                  children: [
+                    Icon(hideDetails
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined),
+                    const SizedBox(width: 8),
+                    Text(hideDetails ? '显示详情' : '隐藏详情'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'sort_group',
+                child: Row(
+                  children: [
+                    Icon(Icons.sort_outlined),
+                    SizedBox(width: 8),
+                    Text('排序方式'),
+                  ],
+                ),
+              ),
+              if (completedTasks.isNotEmpty)
                 const PopupMenuItem(
                   value: 'clear_completed',
                   child: Row(
@@ -133,8 +325,8 @@ class _TasksPageState extends State<TasksPage> {
                     ],
                   ),
                 ),
-              ],
-            ),
+            ],
+          ),
         ],
       ),
       drawer: TaskDrawer(
@@ -146,7 +338,7 @@ class _TasksPageState extends State<TasksPage> {
         },
       ),
       body: hasAnyTasks
-          ? _buildTaskList(context, incompleteTasks, completedTasks)
+          ? _buildTaskList(context, incompleteTasks, completedTasks, hideDetails)
           : _buildEmptyState(context),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _navigateToAddTask(context),
@@ -206,7 +398,21 @@ class _TasksPageState extends State<TasksPage> {
     BuildContext context,
     List<Task> incompleteTasks,
     List<Task> completedTasks,
+    bool hideDetails,
   ) {
+    final groupBy = _viewSettingsController.groupBy;
+
+    // 如果有分组，按分组显示
+    if (groupBy != GroupBy.none) {
+      return _buildGroupedTaskList(
+        context,
+        incompleteTasks,
+        completedTasks,
+        hideDetails,
+      );
+    }
+
+    // 无分组，直接显示列表
     return ListView(
       padding: const EdgeInsets.only(top: 8, bottom: 88),
       children: [
@@ -215,6 +421,7 @@ class _TasksPageState extends State<TasksPage> {
           (task) => TaskListItem(
             key: Key(task.id),
             task: task,
+            hideDetails: hideDetails,
             onTap: () => _navigateToEditTask(context, task),
             onToggleCompleted: () =>
                 _taskController.toggleTaskCompleted(task.id),
@@ -225,7 +432,69 @@ class _TasksPageState extends State<TasksPage> {
 
         // 已完成的任务（可折叠）
         if (completedTasks.isNotEmpty)
-          _buildCompletedSection(context, completedTasks),
+          _buildCompletedSection(context, completedTasks, hideDetails),
+      ],
+    );
+  }
+
+  /// 构建分组任务列表
+  Widget _buildGroupedTaskList(
+    BuildContext context,
+    List<Task> incompleteTasks,
+    List<Task> completedTasks,
+    bool hideDetails,
+  ) {
+    final theme = Theme.of(context);
+    final groupBy = _viewSettingsController.groupBy;
+    final groupedTasks = _groupTasks(incompleteTasks);
+
+    // 对分组进行排序
+    final sortedGroups = groupedTasks.keys.toList()
+      ..sort((a, b) {
+        final priorityA = _getGroupSortPriority(a, groupBy);
+        final priorityB = _getGroupSortPriority(b, groupBy);
+        if (priorityA != priorityB) {
+          return priorityA.compareTo(priorityB);
+        }
+        return a.compareTo(b);
+      });
+
+    return ListView(
+      padding: const EdgeInsets.only(top: 8, bottom: 88),
+      children: [
+        // 分组显示未完成的任务
+        for (final groupKey in sortedGroups) ...[
+          if (groupedTasks[groupKey]!.isNotEmpty) ...[
+            // 分组标题
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text(
+                groupKey.isEmpty ? '任务' : groupKey,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            // 分组内的任务
+            ...groupedTasks[groupKey]!.map(
+              (task) => TaskListItem(
+                key: Key(task.id),
+                task: task,
+                hideDetails: hideDetails,
+                onTap: () => _navigateToEditTask(context, task),
+                onToggleCompleted: () =>
+                    _taskController.toggleTaskCompleted(task.id),
+                onDelete: () => _deleteTask(context, task),
+                groupName: _taskController.getGroupById(task.groupId)?.name,
+              ),
+            ),
+          ],
+        ],
+
+        // 已完成的任务（可折叠）
+        if (completedTasks.isNotEmpty)
+          _buildCompletedSection(context, completedTasks, hideDetails),
       ],
     );
   }
@@ -234,6 +503,7 @@ class _TasksPageState extends State<TasksPage> {
   Widget _buildCompletedSection(
     BuildContext context,
     List<Task> completedTasks,
+    bool hideDetails,
   ) {
     final theme = Theme.of(context);
 
@@ -251,6 +521,7 @@ class _TasksPageState extends State<TasksPage> {
             (task) => TaskListItem(
               key: Key(task.id),
               task: task,
+              hideDetails: hideDetails,
               onTap: () => _navigateToEditTask(context, task),
               onToggleCompleted: () =>
                   _taskController.toggleTaskCompleted(task.id),

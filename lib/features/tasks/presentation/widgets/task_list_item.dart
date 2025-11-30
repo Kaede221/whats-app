@@ -10,6 +10,7 @@ class TaskListItem extends StatefulWidget {
   final VoidCallback? onToggleCompleted;
   final VoidCallback? onDelete;
   final String? groupName;
+  final bool hideDetails;
 
   const TaskListItem({
     super.key,
@@ -18,6 +19,7 @@ class TaskListItem extends StatefulWidget {
     this.onToggleCompleted,
     this.onDelete,
     this.groupName,
+    this.hideDetails = false,
   });
 
   @override
@@ -106,15 +108,16 @@ class _TaskListItemState extends State<TaskListItem>
                       // 标题（带动画划线效果）
                       _buildAnimatedTitle(context),
 
-                      // 详情
-                      if (widget.task.description != null &&
+                      // 详情/备注（如果不隐藏且有内容）
+                      if (!widget.hideDetails &&
+                          widget.task.description != null &&
                           widget.task.description!.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: 4),
                           child: _buildAnimatedDescription(context),
                         ),
 
-                      // 底部信息行（日期和分组）
+                      // 底部信息行（日期和分组）- 始终显示
                       if (widget.task.dueDate != null || widget.groupName != null)
                         Padding(
                           padding: const EdgeInsets.only(top: 8),

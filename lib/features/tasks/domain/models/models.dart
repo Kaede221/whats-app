@@ -6,3 +6,4 @@ export 'task.dart';
 export 'task_filter.dart';
 export 'task_group.dart';
 export 'task_priority.dart';
+export 'view_settings.dart';
