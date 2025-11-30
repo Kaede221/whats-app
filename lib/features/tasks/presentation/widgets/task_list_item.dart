@@ -86,9 +86,17 @@ class _TaskListItemState extends State<TaskListItem>
           child: Padding(
             padding: const EdgeInsets.all(12),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 任务内容（左侧）
+                // 完成状态复选框（左侧，与标题同一行）
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: _buildCheckbox(context),
+                ),
+
+                const SizedBox(width: 12),
+
+                // 任务内容（右侧）
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -113,11 +121,6 @@ class _TaskListItemState extends State<TaskListItem>
                     ],
                   ),
                 ),
-
-                const SizedBox(width: 12),
-
-                // 完成状态复选框（右侧，垂直居中）
-                _buildCheckbox(context),
               ],
             ),
           ),
@@ -198,10 +201,10 @@ class _TaskListItemState extends State<TaskListItem>
       onTap: _handleToggleCompleted,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        width: 28,
-        height: 28,
+        width: 22,
+        height: 22,
         decoration: BoxDecoration(
-          shape: BoxShape.circle,
+          borderRadius: BorderRadius.circular(6),
           border: Border.all(
             color: showCompleted
                 ? theme.colorScheme.primary
@@ -215,7 +218,7 @@ class _TaskListItemState extends State<TaskListItem>
           opacity: showCompleted ? 1.0 : 0.0,
           child: Icon(
             Icons.check,
-            size: 18,
+            size: 16,
             color: theme.colorScheme.onPrimary,
           ),
         ),
