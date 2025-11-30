@@ -1,11 +1,37 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/services/version_check_service.dart';
 
 /// 关于页面
 /// 显示应用版本、作者和GitHub链接信息
-class AboutPage extends StatelessWidget {
+class AboutPage extends StatefulWidget {
   const AboutPage({super.key});
+
+  @override
+  State<AboutPage> createState() => _AboutPageState();
+}
+
+class _AboutPageState extends State<AboutPage> {
+  final _versionCheckService = VersionCheckService();
+  VersionCheckResult? _versionResult;
+  bool _isChecking = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkVersion();
+  }
+
+  Future<void> _checkVersion() async {
+    final result = await _versionCheckService.checkVersion();
+    if (mounted) {
+      setState(() {
+        _versionResult = result;
+        _isChecking = false;
+      });
+    }
+  }
 
   /// 复制文本到剪贴板并显示提示
   void _copyToClipboard(BuildContext context, String text, String label) {
@@ -63,17 +89,7 @@ class AboutPage extends StatelessWidget {
           const Divider(),
 
           // 版本信息
-          _buildInfoTile(
-            context,
-            icon: Icons.info_outline,
-            title: '版本',
-            value: AppConstants.appVersion,
-            onTap: () => _copyToClipboard(
-              context,
-              AppConstants.appVersion,
-              '版本号',
-            ),
-          ),
+          _buildVersionTile(context),
 
           // 作者信息
           _buildInfoTile(
@@ -116,6 +132,70 @@ class AboutPage extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  /// 构建版本信息条目
+  Widget _buildVersionTile(BuildContext context) {
+    final theme = Theme.of(context);
+
+    String subtitle = '正在检查更新...';
+    Widget? trailing;
+    VoidCallback? onTap;
+
+    if (!_isChecking && _versionResult != null) {
+      if (_versionResult!.hasUpdate) {
+        subtitle =
+            '发现新版本: ${_versionResult!.latestVersion} (当前: ${_versionResult!.currentVersion})';
+        trailing = Icon(Icons.system_update, color: theme.colorScheme.error);
+        onTap = () async {
+          if (_versionResult!.releaseUrl != null) {
+            final success = await _versionCheckService
+                .launchUpdateUrl(_versionResult!.releaseUrl!);
+            if (!success && context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('无法打开链接，请手动复制 GitHub 链接'),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }
+          }
+        };
+      } else {
+        subtitle = '已是最新版本 (${_versionResult!.currentVersion})';
+        trailing = Icon(Icons.check_circle, color: theme.colorScheme.primary);
+        onTap = () =>
+            _copyToClipboard(context, _versionResult!.currentVersion, '版本号');
+      }
+    } else if (!_isChecking && _versionResult?.error != null) {
+      subtitle = '检查更新失败 (${AppConstants.appVersion})';
+      onTap = () => _copyToClipboard(context, AppConstants.appVersion, '版本号');
+    } else {
+      // Loading state
+      trailing = const SizedBox(
+          width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2));
+    }
+
+    return ListTile(
+      leading:
+          Icon(Icons.info_outline, color: theme.colorScheme.onSurfaceVariant),
+      title: const Text('版本'),
+      subtitle: Text(
+        subtitle,
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: (_versionResult?.hasUpdate ?? false)
+              ? theme.colorScheme.error
+              : theme.colorScheme.primary,
+        ),
+      ),
+      trailing: trailing ??
+          Icon(
+            Icons.copy,
+            size: 20,
+            color: theme.colorScheme.outline,
+          ),
+      onTap: onTap,
     );
   }
 
