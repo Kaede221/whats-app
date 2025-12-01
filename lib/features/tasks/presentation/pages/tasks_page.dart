@@ -25,6 +25,10 @@ class _TasksPageState extends State<TasksPage> {
   // 当前筛选器，默认显示收集箱
   late TaskFilter _currentFilter;
 
+  // 多选模式状态
+  bool _isSelectionMode = false;
+  final Set<String> _selectedTaskIds = {};
+
   @override
   void initState() {
     super.initState();
@@ -62,11 +66,173 @@ class _TasksPageState extends State<TasksPage> {
           );
         }
       }
+      // 清理已删除任务的选择状态
+      _selectedTaskIds.removeWhere(
+        (id) => !_taskController.tasks.any((t) => t.id == id),
+      );
     });
   }
 
   void _onViewSettingsChanged() {
     setState(() {});
+  }
+
+  /// 进入多选模式（通过长按任务）
+  void _enterSelectionMode(String taskId) {
+    setState(() {
+      _isSelectionMode = true;
+      _selectedTaskIds.add(taskId);
+    });
+  }
+
+  /// 进入多选模式（通过菜单）
+  void _enterBatchEditMode() {
+    setState(() {
+      _isSelectionMode = true;
+    });
+  }
+
+  /// 退出多选模式
+  void _exitSelectionMode() {
+    setState(() {
+      _isSelectionMode = false;
+      _selectedTaskIds.clear();
+    });
+  }
+
+  /// 切换任务选择状态
+  void _toggleTaskSelection(String taskId, bool selected) {
+    setState(() {
+      if (selected) {
+        _selectedTaskIds.add(taskId);
+      } else {
+        _selectedTaskIds.remove(taskId);
+      }
+    });
+  }
+
+  /// 全选/取消全选
+  void _toggleSelectAll(List<Task> tasks) {
+    setState(() {
+      final allTaskIds = tasks.map((t) => t.id).toSet();
+      if (_selectedTaskIds.containsAll(allTaskIds) && allTaskIds.isNotEmpty) {
+        // 已全选，取消全选
+        _selectedTaskIds.clear();
+      } else {
+        // 未全选，全选
+        _selectedTaskIds.addAll(allTaskIds);
+      }
+    });
+  }
+
+  /// 批量设置日期
+  Future<void> _batchSetDueDate(BuildContext context) async {
+    final selectedDate = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+      helpText: '选择截止日期',
+      cancelText: '取消',
+      confirmText: '确定',
+    );
+
+    if (selectedDate != null && mounted) {
+      final count = _selectedTaskIds.length;
+      for (final taskId in _selectedTaskIds) {
+        final task = _taskController.getTaskById(taskId);
+        if (task != null) {
+          _taskController.updateTask(task.copyWith(dueDate: selectedDate));
+        }
+      }
+      _exitSelectionMode();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('已为 $count 个任务设置截止日期'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  /// 批量移动到分组
+  Future<void> _batchMoveToGroup(BuildContext context) async {
+    final groups = _taskController.groups;
+
+    final selectedGroup = await showDialog<TaskGroup>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('移动到分组'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: groups.length,
+            itemBuilder: (context, index) {
+              final group = groups[index];
+              return ListTile(
+                leading: Icon(group.icon, color: group.color),
+                title: Text(group.name),
+                onTap: () => Navigator.pop(context, group),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+        ],
+      ),
+    );
+
+    if (selectedGroup != null && mounted) {
+      final count = _selectedTaskIds.length;
+      for (final taskId in _selectedTaskIds) {
+        final task = _taskController.getTaskById(taskId);
+        if (task != null) {
+          _taskController.updateTask(task.copyWith(groupId: selectedGroup.id));
+        }
+      }
+      _exitSelectionMode();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('已将 $count 个任务移动到 "${selectedGroup.name}"'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  /// 批量删除任务（支持撤销）
+  void _batchDeleteTasks(BuildContext context) {
+    final tasksToDelete = _selectedTaskIds
+        .map((id) => _taskController.getTaskById(id))
+        .whereType<Task>()
+        .toList();
+
+    if (tasksToDelete.isEmpty) return;
+
+    final count = tasksToDelete.length;
+    _taskController.deleteTasks(_selectedTaskIds.toList());
+    _exitSelectionMode();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('已删除 $count 个任务'),
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: '撤销',
+          onPressed: () {
+            // 恢复删除的任务
+            for (final task in tasksToDelete) {
+              _taskController.addTask(task);
+            }
+          },
+        ),
+      ),
+    );
   }
 
   /// 获取当前筛选后的任务列表
@@ -262,87 +428,207 @@ class _TasksPageState extends State<TasksPage> {
     final completedTasks = filteredTasks.where((t) => t.isCompleted).toList();
     final hasAnyTasks = incompleteTasks.isNotEmpty || completedTasks.isNotEmpty;
     final hideDetails = _viewSettingsController.hideDetails;
+    final allTasks = [...incompleteTasks, ...completedTasks];
 
     return Scaffold(
       key: _scaffoldKey,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.menu),
-          onPressed: () {
-            _scaffoldKey.currentState?.openDrawer();
-          },
-        ),
-        title: Text(_currentFilter.name),
-        titleSpacing: 0,
-        actions: [
-          // 三点菜单
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert),
-            onSelected: (value) {
-              switch (value) {
-                case 'toggle_details':
-                  _viewSettingsController.toggleHideDetails();
-                  break;
-                case 'sort_group':
-                  SortGroupDialog.show(context);
-                  break;
-                case 'clear_completed':
-                  _showClearCompletedDialog(context);
-                  break;
-              }
-            },
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                value: 'toggle_details',
-                child: Row(
-                  children: [
-                    Icon(hideDetails
-                        ? Icons.visibility_outlined
-                        : Icons.visibility_off_outlined),
-                    const SizedBox(width: 8),
-                    Text(hideDetails ? '显示详情' : '隐藏详情'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'sort_group',
-                child: Row(
-                  children: [
-                    Icon(Icons.sort_outlined),
-                    SizedBox(width: 8),
-                    Text('排序方式'),
-                  ],
-                ),
-              ),
-              if (completedTasks.isNotEmpty)
-                const PopupMenuItem(
-                  value: 'clear_completed',
-                  child: Row(
-                    children: [
-                      Icon(Icons.delete_sweep_outlined),
-                      SizedBox(width: 8),
-                      Text('清除已完成'),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-        ],
-      ),
-      drawer: TaskDrawer(
-        currentFilter: _currentFilter,
-        onFilterChanged: (filter) {
-          setState(() {
-            _currentFilter = filter;
-          });
-        },
-      ),
+      appBar: _isSelectionMode
+          ? _buildSelectionAppBar(context, allTasks)
+          : _buildNormalAppBar(context, hideDetails, completedTasks),
+      drawer: _isSelectionMode
+          ? null
+          : TaskDrawer(
+              currentFilter: _currentFilter,
+              onFilterChanged: (filter) {
+                setState(() {
+                  _currentFilter = filter;
+                });
+              },
+            ),
       body: hasAnyTasks
           ? _buildTaskList(context, incompleteTasks, completedTasks, hideDetails)
           : _buildEmptyState(context),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _navigateToAddTask(context),
-        child: const Icon(Icons.add),
+      floatingActionButton: _isSelectionMode
+          ? null
+          : FloatingActionButton(
+              onPressed: () => _navigateToAddTask(context),
+              child: const Icon(Icons.add),
+            ),
+      bottomNavigationBar: _isSelectionMode
+          ? _buildSelectionBottomBar(context, allTasks)
+          : null,
+    );
+  }
+
+  /// 构建普通模式的 AppBar
+  PreferredSizeWidget _buildNormalAppBar(
+    BuildContext context,
+    bool hideDetails,
+    List<Task> completedTasks,
+  ) {
+    return AppBar(
+      leading: IconButton(
+        icon: const Icon(Icons.menu),
+        onPressed: () {
+          _scaffoldKey.currentState?.openDrawer();
+        },
+      ),
+      title: Text(_currentFilter.name),
+      titleSpacing: 0,
+      centerTitle: false,
+      actions: [
+        // 三点菜单
+        PopupMenuButton<String>(
+          icon: const Icon(Icons.more_vert),
+          onSelected: (value) {
+            switch (value) {
+              case 'toggle_details':
+                _viewSettingsController.toggleHideDetails();
+                break;
+              case 'sort_group':
+                SortGroupDialog.show(context);
+                break;
+              case 'batch_edit':
+                _enterBatchEditMode();
+                break;
+              case 'clear_completed':
+                _showClearCompletedDialog(context);
+                break;
+            }
+          },
+          itemBuilder: (context) => [
+            PopupMenuItem(
+              value: 'toggle_details',
+              child: Row(
+                children: [
+                  Icon(hideDetails
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined),
+                  const SizedBox(width: 8),
+                  Text(hideDetails ? '显示详情' : '隐藏详情'),
+                ],
+              ),
+            ),
+            const PopupMenuItem(
+              value: 'sort_group',
+              child: Row(
+                children: [
+                  Icon(Icons.sort_outlined),
+                  SizedBox(width: 8),
+                  Text('排序方式'),
+                ],
+              ),
+            ),
+            const PopupMenuItem(
+              value: 'batch_edit',
+              child: Row(
+                children: [
+                  Icon(Icons.checklist_outlined),
+                  SizedBox(width: 8),
+                  Text('批量编辑'),
+                ],
+              ),
+            ),
+            if (completedTasks.isNotEmpty)
+              const PopupMenuItem(
+                value: 'clear_completed',
+                child: Row(
+                  children: [
+                    Icon(Icons.delete_sweep_outlined),
+                    SizedBox(width: 8),
+                    Text('清除已完成'),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// 构建多选模式的 AppBar
+  PreferredSizeWidget _buildSelectionAppBar(
+    BuildContext context,
+    List<Task> allTasks,
+  ) {
+    return AppBar(
+      leading: IconButton(
+        icon: const Icon(Icons.close),
+        onPressed: _exitSelectionMode,
+      ),
+      title: Text('已选择 ${_selectedTaskIds.length} 项'),
+      titleSpacing: 0,
+      centerTitle: false,
+    );
+  }
+
+  /// 构建多选模式的底部操作栏
+  Widget _buildSelectionBottomBar(BuildContext context, List<Task> allTasks) {
+    final theme = Theme.of(context);
+    final allTaskIds = allTasks.map((t) => t.id).toSet();
+    final isAllSelected = _selectedTaskIds.containsAll(allTaskIds) &&
+        _selectedTaskIds.isNotEmpty &&
+        allTaskIds.isNotEmpty;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          child: Row(
+            children: [
+              // 全选按钮
+              TextButton.icon(
+                onPressed: () => _toggleSelectAll(allTasks),
+                icon: Icon(
+                  isAllSelected
+                      ? Icons.check_box
+                      : Icons.check_box_outline_blank,
+                ),
+                label: Text(isAllSelected ? '取消全选' : '全选'),
+              ),
+              const Spacer(),
+              // 设置日期按钮
+              IconButton(
+                onPressed: _selectedTaskIds.isNotEmpty
+                    ? () => _batchSetDueDate(context)
+                    : null,
+                icon: const Icon(Icons.calendar_today_outlined),
+                tooltip: '设置日期',
+              ),
+              // 移动到分组按钮
+              IconButton(
+                onPressed: _selectedTaskIds.isNotEmpty
+                    ? () => _batchMoveToGroup(context)
+                    : null,
+                icon: const Icon(Icons.drive_file_move_outlined),
+                tooltip: '移动到分组',
+              ),
+              // 删除按钮
+              IconButton(
+                onPressed: _selectedTaskIds.isNotEmpty
+                    ? () => _batchDeleteTasks(context)
+                    : null,
+                icon: Icon(
+                  Icons.delete_outline,
+                  color: _selectedTaskIds.isNotEmpty
+                      ? theme.colorScheme.error
+                      : null,
+                ),
+                tooltip: '删除',
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -413,7 +699,7 @@ class _TasksPageState extends State<TasksPage> {
 
     // 无分组，直接显示列表
     return ListView(
-      padding: const EdgeInsets.only(top: 8, bottom: 88),
+      padding: EdgeInsets.only(top: 8, bottom: _isSelectionMode ? 8 : 88),
       children: [
         // 未完成的任务
         ...incompleteTasks.map(
@@ -425,7 +711,12 @@ class _TasksPageState extends State<TasksPage> {
             onToggleCompleted: () =>
                 _taskController.toggleTaskCompleted(task.id),
             onDelete: () => _deleteTask(context, task),
+            onLongPress: () => _enterSelectionMode(task.id),
             groupName: _taskController.getGroupById(task.groupId)?.name,
+            isSelectionMode: _isSelectionMode,
+            isSelected: _selectedTaskIds.contains(task.id),
+            onSelectionChanged: (selected) =>
+                _toggleTaskSelection(task.id, selected),
           ),
         ),
 
@@ -459,7 +750,7 @@ class _TasksPageState extends State<TasksPage> {
       });
 
     return ListView(
-      padding: const EdgeInsets.only(top: 8, bottom: 88),
+      padding: EdgeInsets.only(top: 8, bottom: _isSelectionMode ? 8 : 88),
       children: [
         // 分组显示未完成的任务
         for (final groupKey in sortedGroups) ...[
@@ -485,7 +776,12 @@ class _TasksPageState extends State<TasksPage> {
                 onToggleCompleted: () =>
                     _taskController.toggleTaskCompleted(task.id),
                 onDelete: () => _deleteTask(context, task),
+                onLongPress: () => _enterSelectionMode(task.id),
                 groupName: _taskController.getGroupById(task.groupId)?.name,
+                isSelectionMode: _isSelectionMode,
+                isSelected: _selectedTaskIds.contains(task.id),
+                onSelectionChanged: (selected) =>
+                    _toggleTaskSelection(task.id, selected),
               ),
             ),
           ],
@@ -525,7 +821,12 @@ class _TasksPageState extends State<TasksPage> {
               onToggleCompleted: () =>
                   _taskController.toggleTaskCompleted(task.id),
               onDelete: () => _deleteTask(context, task),
+              onLongPress: () => _enterSelectionMode(task.id),
               groupName: _taskController.getGroupById(task.groupId)?.name,
+              isSelectionMode: _isSelectionMode,
+              isSelected: _selectedTaskIds.contains(task.id),
+              onSelectionChanged: (selected) =>
+                  _toggleTaskSelection(task.id, selected),
             ),
           )
           .toList(),

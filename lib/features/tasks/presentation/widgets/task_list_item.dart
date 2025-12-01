@@ -9,8 +9,12 @@ class TaskListItem extends StatefulWidget {
   final VoidCallback? onTap;
   final VoidCallback? onToggleCompleted;
   final VoidCallback? onDelete;
+  final VoidCallback? onLongPress;
   final String? groupName;
   final bool hideDetails;
+  final bool isSelectionMode;
+  final bool isSelected;
+  final ValueChanged<bool>? onSelectionChanged;
 
   const TaskListItem({
     super.key,
@@ -18,8 +22,12 @@ class TaskListItem extends StatefulWidget {
     this.onTap,
     this.onToggleCompleted,
     this.onDelete,
+    this.onLongPress,
     this.groupName,
     this.hideDetails = false,
+    this.isSelectionMode = false,
+    this.isSelected = false,
+    this.onSelectionChanged,
   });
 
   @override
@@ -84,18 +92,26 @@ class _TaskListItemState extends State<TaskListItem>
       ),
       child: Card(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        color: widget.isSelected
+            ? theme.colorScheme.primaryContainer.withOpacity(0.5)
+            : null,
         child: InkWell(
-          onTap: widget.onTap,
+          onTap: widget.isSelectionMode
+              ? () => widget.onSelectionChanged?.call(!widget.isSelected)
+              : widget.onTap,
+          onLongPress: widget.onLongPress,
           borderRadius: BorderRadius.circular(12),
           child: Padding(
             padding: const EdgeInsets.all(12),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 完成状态复选框（左侧，与标题同一行）
+                // 多选模式下显示选择框，否则显示完成状态复选框
                 Padding(
                   padding: const EdgeInsets.only(top: 2),
-                  child: _buildCheckbox(context),
+                  child: widget.isSelectionMode
+                      ? _buildSelectionCheckbox(context)
+                      : _buildCheckbox(context),
                 ),
 
                 const SizedBox(width: 12),
@@ -193,6 +209,41 @@ class _TaskListItemState extends State<TaskListItem>
           ),
         );
       },
+    );
+  }
+
+  /// 构建多选模式下的选择框
+  Widget _buildSelectionCheckbox(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return GestureDetector(
+      onTap: () => widget.onSelectionChanged?.call(!widget.isSelected),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        width: 22,
+        height: 22,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: widget.isSelected
+                ? theme.colorScheme.primary
+                : theme.colorScheme.outline,
+            width: 2,
+          ),
+          color: widget.isSelected
+              ? theme.colorScheme.primary
+              : Colors.transparent,
+        ),
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 200),
+          opacity: widget.isSelected ? 1.0 : 0.0,
+          child: Icon(
+            Icons.check,
+            size: 16,
+            color: theme.colorScheme.onPrimary,
+          ),
+        ),
+      ),
     );
   }
 
