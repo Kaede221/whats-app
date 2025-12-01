@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../domain/models/models.dart';
 import '../../domain/controllers/task_controller.dart';
 import '../../domain/controllers/view_settings_controller.dart';
@@ -28,6 +29,9 @@ class _TasksPageState extends State<TasksPage> {
   // 多选模式状态
   bool _isSelectionMode = false;
   final Set<String> _selectedTaskIds = {};
+
+  // 双击返回退出应用的时间戳
+  DateTime? _lastBackPressTime;
 
   @override
   void initState() {
@@ -421,6 +425,33 @@ class _TasksPageState extends State<TasksPage> {
     }
   }
 
+  /// 处理返回键按下事件
+  Future<bool> _onWillPop() async {
+    // 如果在多选模式下，退出多选模式
+    if (_isSelectionMode) {
+      _exitSelectionMode();
+      return false; // 不退出应用
+    }
+
+    // 双击返回退出应用
+    final now = DateTime.now();
+    if (_lastBackPressTime == null ||
+        now.difference(_lastBackPressTime!) > const Duration(seconds: 2)) {
+      _lastBackPressTime = now;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('再按一次返回键退出应用'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return false; // 不退出应用
+    }
+
+    // 双击确认，退出应用
+    SystemNavigator.pop();
+    return true;
+  }
+
   @override
   Widget build(BuildContext context) {
     final filteredTasks = _getFilteredTasks();
@@ -430,33 +461,40 @@ class _TasksPageState extends State<TasksPage> {
     final hideDetails = _viewSettingsController.hideDetails;
     final allTasks = [...incompleteTasks, ...completedTasks];
 
-    return Scaffold(
-      key: _scaffoldKey,
-      appBar: _isSelectionMode
-          ? _buildSelectionAppBar(context, allTasks)
-          : _buildNormalAppBar(context, hideDetails, completedTasks),
-      drawer: _isSelectionMode
-          ? null
-          : TaskDrawer(
-              currentFilter: _currentFilter,
-              onFilterChanged: (filter) {
-                setState(() {
-                  _currentFilter = filter;
-                });
-              },
-            ),
-      body: hasAnyTasks
-          ? _buildTaskList(context, incompleteTasks, completedTasks, hideDetails)
-          : _buildEmptyState(context),
-      floatingActionButton: _isSelectionMode
-          ? null
-          : FloatingActionButton(
-              onPressed: () => _navigateToAddTask(context),
-              child: const Icon(Icons.add),
-            ),
-      bottomNavigationBar: _isSelectionMode
-          ? _buildSelectionBottomBar(context, allTasks)
-          : null,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        await _onWillPop();
+      },
+      child: Scaffold(
+        key: _scaffoldKey,
+        appBar: _isSelectionMode
+            ? _buildSelectionAppBar(context, allTasks)
+            : _buildNormalAppBar(context, hideDetails, completedTasks),
+        drawer: _isSelectionMode
+            ? null
+            : TaskDrawer(
+                currentFilter: _currentFilter,
+                onFilterChanged: (filter) {
+                  setState(() {
+                    _currentFilter = filter;
+                  });
+                },
+              ),
+        body: hasAnyTasks
+            ? _buildTaskList(context, incompleteTasks, completedTasks, hideDetails)
+            : _buildEmptyState(context),
+        floatingActionButton: _isSelectionMode
+            ? null
+            : FloatingActionButton(
+                onPressed: () => _navigateToAddTask(context),
+                child: const Icon(Icons.add),
+              ),
+        bottomNavigationBar: _isSelectionMode
+            ? _buildSelectionBottomBar(context, allTasks)
+            : null,
+      ),
     );
   }
 
