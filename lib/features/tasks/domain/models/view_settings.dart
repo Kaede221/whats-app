@@ -1,14 +1,18 @@
 /// 视图设置模型
 /// 用于存储任务列表的显示设置，包括隐藏详情、分组方式、排序方式
+library;
 
 /// 分组方式枚举
 enum GroupBy {
   /// 不分组
   none('none', '不分组'),
+
   /// 按分组
   group('group', '按分组'),
+
   /// 按时间
   dueDate('dueDate', '按时间'),
+
   /// 按优先级
   priority('priority', '按优先级');
 
@@ -30,8 +34,10 @@ enum GroupBy {
 enum SortBy {
   /// 按创建时间
   createdAt('createdAt', '创建时间'),
+
   /// 按截止时间
   dueDate('dueDate', '截止时间'),
+
   /// 按优先级
   priority('priority', '优先级');
 
@@ -53,6 +59,7 @@ enum SortBy {
 enum SortOrder {
   /// 升序
   ascending('asc', '升序'),
+
   /// 降序
   descending('desc', '降序');
 
