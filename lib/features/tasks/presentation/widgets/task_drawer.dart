@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../domain/models/models.dart';
 import '../../domain/controllers/task_controller.dart';
 import 'create_group_dialog.dart';
+import 'edit_group_dialog.dart';
 
 /// 任务侧边栏抽屉
 /// 显示筛选器和分组列表，用于切换任务视图
@@ -199,7 +200,8 @@ class _TaskDrawerState extends State<TaskDrawer> {
         ),
         trailing: taskCount > 0
             ? Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
                   color: theme.colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(12),
@@ -208,13 +210,49 @@ class _TaskDrawerState extends State<TaskDrawer> {
               )
             : null,
         selected: isSelected,
-        selectedTileColor: theme.colorScheme.primaryContainer.withOpacity(0.3),
+        selectedTileColor:
+            theme.colorScheme.primaryContainer.withOpacity(0.3),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         onTap: () {
           widget.onFilterChanged(filter);
           Navigator.pop(context);
         },
+        onLongPress: () => _showEditGroupDialog(context, group),
       ),
     );
+  }
+
+  /// 显示编辑分组对话框
+  Future<void> _showEditGroupDialog(
+      BuildContext context, TaskGroup group) async {
+    final result = await EditGroupDialog.show(context, group);
+    if (result != null && mounted) {
+      if (result.isDeleted) {
+        // 如果删除了当前选中的分组，切换到收集箱
+        if (widget.currentFilter.groupId == group.id) {
+          final inbox = _taskController.getGroupById('inbox');
+          if (inbox != null) {
+            final inboxFilter = TaskFilter.fromGroup(
+              groupId: inbox.id,
+              name: inbox.name,
+              icon: inbox.icon,
+              color: inbox.color,
+            );
+            widget.onFilterChanged(inboxFilter);
+          }
+        }
+      } else if (result.updatedGroup != null) {
+        // 如果更新了当前选中的分组，更新筛选器
+        if (widget.currentFilter.groupId == group.id) {
+          final updatedFilter = TaskFilter.fromGroup(
+            groupId: result.updatedGroup!.id,
+            name: result.updatedGroup!.name,
+            icon: result.updatedGroup!.icon,
+            color: result.updatedGroup!.color,
+          );
+          widget.onFilterChanged(updatedFilter);
+        }
+      }
+    }
   }
 }
