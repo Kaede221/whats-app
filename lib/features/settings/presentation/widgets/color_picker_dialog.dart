@@ -30,17 +30,19 @@ class ColorPickerDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    
     // 使用 AppConstants 中的颜色列表，确保与分组颜色一致
     // 另外加上默认的紫色（如果不在列表中）
     final List<Color> colors = [
       const Color(0xFF6750A4), // 默认紫色
       ...AppConstants.groupColors,
     ];
-    
+
     // 去重
-    final uniqueColors = colors.map((c) => c.value).toSet().map((v) => Color(v)).toList();
+    final uniqueColors = colors
+        .map((c) => c.value)
+        .toSet()
+        .map((v) => Color(v))
+        .toList();
 
     return AlertDialog(
       title: const Text('选择主题颜色'),
