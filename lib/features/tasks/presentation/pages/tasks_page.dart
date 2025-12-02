@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../../../core/constants/app_constants.dart';
 import '../../domain/models/models.dart';
 import '../../domain/controllers/task_controller.dart';
 import '../../domain/controllers/view_settings_controller.dart';
@@ -171,8 +172,31 @@ class _TasksPageState extends State<TasksPage> {
           width: double.maxFinite,
           child: ListView.builder(
             shrinkWrap: true,
-            itemCount: groups.length,
+            itemCount: groups.length + 1,
             itemBuilder: (context, index) {
+              if (index == groups.length) {
+                // 新建分组选项
+                return ListTile(
+                  leading: Icon(
+                    Icons.add,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  title: Text(
+                    '新建分组',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                  onTap: () async {
+                    Navigator.pop(context); // 关闭选择对话框
+                    final newGroup = await _showCreateGroupDialog(context);
+                    if (newGroup != null && mounted) {
+                      _moveTasksToGroup(newGroup);
+                    }
+                  },
+                );
+              }
+
               final group = groups[index];
               return ListTile(
                 leading: Icon(group.icon, color: group.color),
@@ -192,21 +216,129 @@ class _TasksPageState extends State<TasksPage> {
     );
 
     if (selectedGroup != null && mounted) {
-      final count = _selectedTaskIds.length;
-      for (final taskId in _selectedTaskIds) {
-        final task = _taskController.getTaskById(taskId);
-        if (task != null) {
-          _taskController.updateTask(task.copyWith(groupId: selectedGroup.id));
-        }
-      }
-      _exitSelectionMode();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('已将 $count 个任务移动到 "${selectedGroup.name}"'),
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      _moveTasksToGroup(selectedGroup);
     }
+  }
+
+  /// 将选中的任务移动到指定分组
+  void _moveTasksToGroup(TaskGroup group) {
+    final count = _selectedTaskIds.length;
+    for (final taskId in _selectedTaskIds) {
+      final task = _taskController.getTaskById(taskId);
+      if (task != null) {
+        _taskController.updateTask(task.copyWith(groupId: group.id));
+      }
+    }
+    _exitSelectionMode();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('已将 $count 个任务移动到 "${group.name}"'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  /// 显示创建分组对话框
+  Future<TaskGroup?> _showCreateGroupDialog(BuildContext context) async {
+    final theme = Theme.of(context);
+    final nameController = TextEditingController();
+    Color selectedColor = theme.colorScheme.primary;
+
+    // 预设颜色列表
+    final presetColors = [
+      theme.colorScheme.primary,
+      ...AppConstants.groupColors,
+    ];
+
+    return showDialog<TaskGroup>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('新建分组'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: '分组名称',
+                  hintText: '输入分组名称',
+                  border: OutlineInputBorder(),
+                ),
+                autofocus: true,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                '选择颜色',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: presetColors.map((color) {
+                  final isSelected = selectedColor.value == color.value;
+                  return GestureDetector(
+                    onTap: () {
+                      setDialogState(() => selectedColor = color);
+                    },
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                        border: isSelected
+                            ? Border.all(
+                                color: theme.colorScheme.onSurface,
+                                width: 3,
+                              )
+                            : null,
+                      ),
+                      child: isSelected
+                          ? Icon(
+                              Icons.check,
+                              color: _getContrastColor(color),
+                              size: 20,
+                            )
+                          : null,
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () {
+                final name = nameController.text.trim();
+                if (name.isNotEmpty) {
+                  final newGroup = _taskController.createGroup(
+                    name: name,
+                    color: selectedColor,
+                  );
+                  Navigator.pop(dialogContext, newGroup);
+                }
+              },
+              child: const Text('创建'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 获取对比色
+  Color _getContrastColor(Color color) {
+    final luminance = color.computeLuminance();
+    return luminance > 0.5 ? Colors.black : Colors.white;
   }
 
   /// 批量删除任务（支持撤销）

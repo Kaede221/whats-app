@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 /// 应用常量配置
@@ -41,4 +42,17 @@ class AppConstants {
   // 通用文本
   static const String noTasks = '暂无任务';
   static const String addTask = '添加任务';
+
+  // 分组颜色
+  static const List<Color> groupColors = [
+    Color(0xFF2196F3), // Blue
+    Color(0xFF4CAF50), // Green
+    Color(0xFFFF9800), // Orange
+    Color(0xFFF44336), // Red
+    Color(0xFFE91E63), // Pink
+    Color(0xFF9C27B0), // Purple
+    Color(0xFF00BCD4), // Cyan
+    Color(0xFF795548), // Brown
+    Color(0xFF607D8B), // Blue Grey
+  ];
 }

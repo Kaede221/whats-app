@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../core/constants/app_constants.dart';
 import '../../domain/models/models.dart';
 import '../../domain/controllers/task_controller.dart';
 
@@ -225,13 +226,7 @@ class _TaskDrawerState extends State<TaskDrawer> {
     // 预设颜色列表
     final presetColors = [
       theme.colorScheme.primary,
-      const Color(0xFF2196F3),
-      const Color(0xFF4CAF50),
-      const Color(0xFFFF9800),
-      const Color(0xFFF44336),
-      const Color(0xFFE91E63),
-      const Color(0xFF00BCD4),
-      const Color(0xFF795548),
+      ...AppConstants.groupColors,
     ];
     
     showDialog(
