@@ -39,7 +39,25 @@ class _TasksPageState extends State<TasksPage> {
     super.initState();
     _taskController.addListener(_onTasksChanged);
     _viewSettingsController.addListener(_onViewSettingsChanged);
-    // 初始化为收集箱筛选器
+    // 初始化筛选器，优先使用上次保存的筛选器
+    _initializeFilter();
+  }
+
+  /// 初始化筛选器
+  /// 优先使用上次保存的筛选器，如果没有则使用收集箱
+  void _initializeFilter() {
+    final lastFilterId = _viewSettingsController.lastFilterId;
+    
+    if (lastFilterId != null) {
+      // 尝试恢复上次的筛选器
+      final restoredFilter = _restoreFilterById(lastFilterId);
+      if (restoredFilter != null) {
+        _currentFilter = restoredFilter;
+        return;
+      }
+    }
+    
+    // 默认使用收集箱
     final inbox = _taskController.getGroupById('inbox') ?? TaskGroup.inbox;
     _currentFilter = TaskFilter.fromGroup(
       groupId: inbox.id,
@@ -47,6 +65,32 @@ class _TasksPageState extends State<TasksPage> {
       icon: inbox.icon,
       color: inbox.color,
     );
+  }
+
+  /// 根据筛选器ID恢复筛选器
+  TaskFilter? _restoreFilterById(String filterId) {
+    // 检查是否是预设筛选器
+    for (final preset in TaskFilter.presetFilters) {
+      if (preset.id == filterId) {
+        return preset;
+      }
+    }
+    
+    // 检查是否是分组筛选器
+    if (filterId.startsWith('group_')) {
+      final groupId = filterId.substring(6); // 移除 'group_' 前缀
+      final group = _taskController.getGroupById(groupId);
+      if (group != null) {
+        return TaskFilter.fromGroup(
+          groupId: group.id,
+          name: group.name,
+          icon: group.icon,
+          color: group.color,
+        );
+      }
+    }
+    
+    return null;
   }
 
   @override
@@ -80,6 +124,15 @@ class _TasksPageState extends State<TasksPage> {
 
   void _onViewSettingsChanged() {
     setState(() {});
+  }
+
+  /// 更新当前筛选器并保存
+  void _updateFilter(TaskFilter filter) {
+    setState(() {
+      _currentFilter = filter;
+    });
+    // 保存当前筛选器ID
+    _viewSettingsController.setLastFilterId(filter.id);
   }
 
   /// 进入多选模式（通过长按任务）
@@ -507,9 +560,7 @@ class _TasksPageState extends State<TasksPage> {
             : TaskDrawer(
                 currentFilter: _currentFilter,
                 onFilterChanged: (filter) {
-                  setState(() {
-                    _currentFilter = filter;
-                  });
+                  _updateFilter(filter);
                 },
               ),
         body: hasAnyTasks

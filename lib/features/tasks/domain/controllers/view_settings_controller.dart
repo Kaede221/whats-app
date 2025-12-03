@@ -38,6 +38,9 @@ class ViewSettingsController extends ChangeNotifier {
   /// 排序顺序
   SortOrder get sortOrder => _settings.sortOrder;
 
+  /// 上次查看的筛选器ID
+  String? get lastFilterId => _settings.lastFilterId;
+
   /// 从存储加载设置
   Future<void> loadFromStorage() async {
     final savedSettings = _storage.getViewSettings();
@@ -111,18 +114,29 @@ class ViewSettingsController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 设置上次查看的筛选器ID
+  void setLastFilterId(String? filterId) {
+    if (_settings.lastFilterId != filterId) {
+      _settings = _settings.copyWith(lastFilterId: filterId);
+      _saveSettings();
+      // 不需要 notifyListeners，因为这只是记录状态，不影响UI
+    }
+  }
+
   /// 更新所有设置
   void updateSettings({
     bool? hideDetails,
     GroupBy? groupBy,
     SortBy? sortBy,
     SortOrder? sortOrder,
+    String? lastFilterId,
   }) {
     _settings = _settings.copyWith(
       hideDetails: hideDetails,
       groupBy: groupBy,
       sortBy: sortBy,
       sortOrder: sortOrder,
+      lastFilterId: lastFilterId,
     );
     _saveSettings();
     notifyListeners();

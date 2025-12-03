@@ -91,11 +91,16 @@ class ViewSettings {
   /// 排序顺序
   final SortOrder sortOrder;
 
+  /// 上次查看的筛选器ID
+  /// 用于记录用户离开时正在查看的分组/筛选器
+  final String? lastFilterId;
+
   const ViewSettings({
     this.hideDetails = false,
     this.groupBy = GroupBy.none,
     this.sortBy = SortBy.createdAt,
     this.sortOrder = SortOrder.descending,
+    this.lastFilterId,
   });
 
   /// 默认设置
@@ -107,12 +112,14 @@ class ViewSettings {
     GroupBy? groupBy,
     SortBy? sortBy,
     SortOrder? sortOrder,
+    String? lastFilterId,
   }) {
     return ViewSettings(
       hideDetails: hideDetails ?? this.hideDetails,
       groupBy: groupBy ?? this.groupBy,
       sortBy: sortBy ?? this.sortBy,
       sortOrder: sortOrder ?? this.sortOrder,
+      lastFilterId: lastFilterId ?? this.lastFilterId,
     );
   }
 
@@ -123,6 +130,7 @@ class ViewSettings {
       'groupBy': groupBy.value,
       'sortBy': sortBy.value,
       'sortOrder': sortOrder.value,
+      'lastFilterId': lastFilterId,
     };
   }
 
@@ -133,6 +141,7 @@ class ViewSettings {
       groupBy: GroupBy.fromValue(map['groupBy'] as String? ?? 'none'),
       sortBy: SortBy.fromValue(map['sortBy'] as String? ?? 'createdAt'),
       sortOrder: SortOrder.fromValue(map['sortOrder'] as String? ?? 'desc'),
+      lastFilterId: map['lastFilterId'] as String?,
     );
   }
 
@@ -143,16 +152,17 @@ class ViewSettings {
         other.hideDetails == hideDetails &&
         other.groupBy == groupBy &&
         other.sortBy == sortBy &&
-        other.sortOrder == sortOrder;
+        other.sortOrder == sortOrder &&
+        other.lastFilterId == lastFilterId;
   }
 
   @override
   int get hashCode {
-    return Object.hash(hideDetails, groupBy, sortBy, sortOrder);
+    return Object.hash(hideDetails, groupBy, sortBy, sortOrder, lastFilterId);
   }
 
   @override
   String toString() {
-    return 'ViewSettings(hideDetails: $hideDetails, groupBy: ${groupBy.label}, sortBy: ${sortBy.label}, sortOrder: ${sortOrder.label})';
+    return 'ViewSettings(hideDetails: $hideDetails, groupBy: ${groupBy.label}, sortBy: ${sortBy.label}, sortOrder: ${sortOrder.label}, lastFilterId: $lastFilterId)';
   }
 }
